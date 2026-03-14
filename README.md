@@ -1,16 +1,159 @@
-# React + Vite
+# Algorithm Visualizer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+![Live Demo](https://img.shields.io/badge/Live-Demo-green?style=for-the-badge\&logo=vercel)
 
-Currently, two official plugins are available:
+**Interactive visualization tool for learning algorithms through animations.**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+This project helps students and developers understand how algorithms work internally by visualizing them step-by-step. Instead of just reading pseudocode, users can see algorithms executing in real time.
 
-## React Compiler
+## Live Demo
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+https://algovisualizer-alpha.vercel.app
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+# Features
+
+* Interactive algorithm animations
+* Visual comparison of sorting techniques
+* Graph traversal visualizations
+* Backtracking algorithm demonstration
+* Prime number generation visualization
+* Clean UI designed for learning
+
+---
+
+# Algorithms Implemented
+
+## Sorting Algorithms
+
+* Bubble Sort
+* Merge Sort
+* Quick Sort
+* Heap Sort
+
+## Graph / Pathfinding Algorithms
+
+* Breadth First Search (BFS)
+* Depth First Search (DFS)
+* Dijkstra's Algorithm
+* A* Search Algorithm
+
+## Searching
+
+* Binary Search
+
+## Backtracking
+
+* N-Queens Problem
+
+## Geometry
+
+* Convex Hull
+
+  * Graham Scan
+  * Jarvis March
+
+## Number Theory
+
+* Sieve of Eratosthenes (Prime Numbers)
+
+---
+
+# Time Complexity Overview
+
+| Algorithm     | Best       | Average    | Worst      |
+| ------------- | ---------- | ---------- | ---------- |
+| Bubble Sort   | O(n)       | O(n²)      | O(n²)      |
+| Merge Sort    | O(n log n) | O(n log n) | O(n log n) |
+| Quick Sort    | O(n log n) | O(n log n) | O(n²)      |
+| Heap Sort     | O(n log n) | O(n log n) | O(n log n) |
+| Binary Search | O(log n)   | O(log n)   | O(log n)   |
+| BFS / DFS     | O(V + E)   | O(V + E)   | O(V + E)   |
+
+---
+
+# Tech Stack
+
+* **React**
+* **Vite**
+* **JavaScript**
+* **HTML**
+* **CSS**
+
+---
+
+# Project Structure
+
+```
+Algorithm_Visualizer
+│
+├── public/        # Static assets
+├── src/           # React source code
+│   ├── components
+│   ├── algorithms
+│   ├── pages
+│   └── styles
+│
+├── index.html
+├── package.json
+├── vite.config.js
+└── README.md
+```
+
+---
+
+# Installation
+
+Clone the repository
+
+```
+git clone https://github.com/NotMedhansh/Algorithm_Visualizer.git
+```
+
+Go to project folder
+
+```
+cd Algorithm_Visualizer
+```
+
+Install dependencies
+
+```
+npm install
+```
+
+Run the development server
+
+```
+npm run dev
+```
+
+---
+
+# Deployment
+
+The project is deployed using **Vercel**.
+
+Every commit pushed to the GitHub repository automatically triggers a new deployment.
+
+---
+
+# Future Improvements
+
+* Add more graph algorithms
+* Add animation speed control
+* Add algorithm explanations
+* Add complexity comparison charts
+* Add dark/light theme toggle
+
+---
+
+# Author
+
+**Medhansh Khurana**
+
+B.Tech CSE Student interested in algorithms, problem solving and software development.
+
+GitHub:
+https://github.com/NotMedhansh
