@@ -22,6 +22,217 @@ const COLORS = {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// ─── AI API HELPER ────────────────────────────────────────────────────────────
+const callAI = async (prompt, systemPrompt = "") => {
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "http://localhost:5173", // optional but recommended
+      "X-Title": "Algo Visualizer", // optional
+    },
+    body: JSON.stringify({
+      model: "deepseek/deepseek-chat",
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt || "You are a helpful assistant.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!data.choices) {
+    throw new Error(JSON.stringify(data));
+  }
+
+  return data.choices[0].message.content;
+};
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE 1 — AI EXPLAINER PANEL
+// Sits below the canvas in any visualizer. Call triggerExplain(context) to fire.
+// ═══════════════════════════════════════════════════════════════════════════════
+function AIExplainerPanel({ algoName, algoContext }) {
+  const [explanation, setExplanation] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  const explain = async () => {
+    setOpen(true);
+    setLoading(true);
+    setExplanation("");
+    try {
+      const system = `You are an algorithm tutor. Respond in exactly 2-3 plain sentences. No markdown. No bullet points. No bold or italic symbols. No headers. No lists. Just plain conversational sentences. Example of correct output: "Bubble Sort is comparing index 3 and index 4. Since 47 is greater than 12, it will swap them. This pushes larger values toward the end of the array."`;
+      const prompt = `Algorithm: ${algoName}\nCurrent state: ${algoContext}\nExplain what is happening right now and why. Remember: 2-3 plain sentences only, no markdown.`;
+      const result = await callAI(prompt, system);
+      setExplanation(result);
+    } catch (e) {
+      setExplanation("Could not load explanation. Check your API key in the .env file.");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ borderTop: "1px solid #1e293b", background: "#080e1a" }}>
+      {/* Toggle bar */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 13, color: "#10b981" }}>✦</span>
+          <span style={{ fontSize: 12, color: "#64748b", fontFamily: "'IBM Plex Mono', monospace" }}>AI Explainer</span>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={explain}
+            style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", padding: "5px 14px", background: "#064e3b", border: "1px solid #10b981", color: "#10b981", borderRadius: 6, cursor: "pointer", transition: "all 0.15s" }}
+            onMouseEnter={e => { e.currentTarget.style.background = "#10b981"; e.currentTarget.style.color = "#0f172a"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "#064e3b"; e.currentTarget.style.color = "#10b981"; }}
+          >
+            ✦ Explain This
+          </button>
+          {open && (
+            <button
+              onClick={() => setOpen(false)}
+              style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, padding: "5px 10px", background: "transparent", border: "1px solid #1e293b", color: "#64748b", borderRadius: 6, cursor: "pointer" }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Explanation box */}
+      {open && (
+        <div style={{ padding: "0 20px 14px" }}>
+          <div style={{ background: "#0d1829", border: "1px solid #1e3a5f", borderLeft: "3px solid #10b981", borderRadius: 6, padding: "12px 16px", minHeight: 60, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, lineHeight: 1.8, color: loading ? "#64748b" : "#cbd5e1" }}>
+            {loading ? (
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ animation: "pulse 1s infinite" }}>✦</span> Analyzing algorithm state...
+              </span>
+            ) : explanation}
+          </div>
+        </div>
+      )}
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE 2 — AI ALGORITHM RECOMMENDER
+// Sits on the home page below the module cards
+// ═══════════════════════════════════════════════════════════════════════════════
+function AIRecommender({ onNavigate }) {
+  const [query, setQuery] = useState("");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const VALID_IDS = ["sorting", "pathfinding", "bsearch", "nqueen", "convexhull", "primes", "recursion"];
+
+  const ask = async () => {
+    if (!query.trim() || loading) return;
+    setLoading(true);
+    setResult(null);
+    try {
+      const system = `
+You are an algorithm recommendation engine.
+
+Return ONLY valid JSON. Do NOT include any explanation, text, or markdown.
+
+Format:
+{"id":"module_id","name":"Module Name","reason":"Short explanation"}
+
+Valid ids:
+sorting, pathfinding, bsearch, nqueen, convexhull, primes, recursion
+`;
+      const prompt = `User's problem: ${query}`;
+      const raw = await callAI(prompt, system);
+      let parsed;
+
+try {
+  const match = raw.match(/\{[\s\S]*\}/); // extract JSON
+  if (!match) throw new Error("No JSON found");
+
+  parsed = JSON.parse(match[0]);
+} catch (err) {
+  console.error("RAW AI RESPONSE:", raw);
+  throw new Error("Invalid JSON");
+}
+      if (VALID_IDS.includes(parsed.id)) setResult(parsed);
+      else setResult({ id: null, name: "Unsure", reason: raw });
+    } catch (e) {
+      setResult({ id: null, name: "Error", reason: "Could not get a recommendation. Please check your API key." });
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 24px 40px" }}>
+      {/* Section header */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <span style={{ fontSize: 16, color: "#10b981" }}>✦</span>
+          <span style={{ fontFamily: "'Exo 2', sans-serif", fontWeight: 700, fontSize: 20, color: "#f1f5f9" }}>AI Algorithm Recommender</span>
+        </div>
+        <p style={{ fontSize: 13, color: "#64748b", fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1.7 }}>
+          Describe your problem in plain English and the AI will recommend the right algorithm and visualizer for you.
+        </p>
+      </div>
+
+      {/* Input row */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && ask()}
+          placeholder='e.g. "Find the shortest path between two cities" or "Sort a list of student grades"'
+          style={{ flex: 1, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, background: "#1e293b", border: "1px solid #334155", color: "#e2e8f0", padding: "10px 16px", borderRadius: 8, outline: "none", transition: "border 0.15s" }}
+          onFocus={e => e.target.style.borderColor = "#10b981"}
+          onBlur={e => e.target.style.borderColor = "#334155"}
+        />
+        <button
+          onClick={() => {
+            if (!loading) ask();
+}}
+          disabled={loading || !query.trim()}
+          style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", padding: "10px 22px", background: loading ? "#064e3b" : "#064e3b", border: "1px solid #10b981", color: "#10b981", borderRadius: 8, cursor: loading ? "default" : "pointer", opacity: !query.trim() ? 0.5 : 1, whiteSpace: "nowrap", transition: "all 0.15s" }}
+          onMouseEnter={e => { if (!loading && query.trim()) { e.currentTarget.style.background = "#10b981"; e.currentTarget.style.color = "#0f172a"; } }}
+          onMouseLeave={e => { e.currentTarget.style.background = "#064e3b"; e.currentTarget.style.color = "#10b981"; }}
+        >
+          {loading ? "✦ Thinking..." : "✦ Recommend"}
+        </button>
+      </div>
+
+      {/* Result card */}
+      {result && (
+        <div style={{ background: "#1e293b", border: "1px solid #334155", borderLeft: "3px solid #10b981", borderRadius: 10, padding: "20px 24px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 11, color: "#10b981", fontFamily: "'IBM Plex Mono', monospace", textTransform: "uppercase", letterSpacing: 1 }}>Recommended</span>
+              <span style={{ fontFamily: "'Exo 2', sans-serif", fontWeight: 700, fontSize: 17, color: "#f1f5f9" }}>{result.name}</span>
+            </div>
+            <p style={{ fontSize: 13, color: "#94a3b8", fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1.8, margin: 0 }}>{result.reason}</p>
+          </div>
+          {result.id && (
+            <button
+              onClick={() => onNavigate(result.id)}
+              style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", padding: "10px 20px", background: "#10b981", border: "none", color: "#0f172a", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+            >
+              Open Visualizer →
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
 const MODULES = [
   { id: "sorting",     label: "Sorting Algorithms",  desc: "Visualize Bubble, Merge, Quick, Heap, and more",                  icon: "⬆" },
@@ -51,6 +262,9 @@ function HomePage({ onNavigate }) {
         </p>
       </div>
 
+      {/* ── FEATURE 2: AI Recommender sits between hero and cards ── */}
+      <AIRecommender onNavigate={onNavigate} />
+
       {/* Cards */}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 24px 80px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
         {MODULES.map((m) => (
@@ -77,7 +291,7 @@ function HomePage({ onNavigate }) {
 }
 
 // ─── SHARED LAYOUT ────────────────────────────────────────────────────────────
-function VisualizerLayout({ title, onBack, controls, legend, children }) {
+function VisualizerLayout({ title, onBack, controls, legend, children, aiPanel }) {
   return (
     <div style={{ minHeight: "100vh", background: "#0f172a", color: "#e2e8f0", fontFamily: "'IBM Plex Mono', monospace", display: "flex", flexDirection: "column" }}>
       {/* Top bar */}
@@ -110,6 +324,8 @@ function VisualizerLayout({ title, onBack, controls, legend, children }) {
             ))}
           </div>
         )}
+        {/* ── FEATURE 1: AI Explainer panel slot ── */}
+        {aiPanel}
       </div>
     </div>
   );
@@ -175,6 +391,8 @@ function SortingVisualizer({ onBack }) {
   const [speed, setSpeed] = useState(50);
   const [running, setRunning] = useState(false);
   const [stats, setStats] = useState({ comparisons: 0, swaps: 0 });
+
+  const ALGO_LABELS = { bubble: "Bubble Sort", selection: "Selection Sort", insertion: "Insertion Sort", quick: "Quick Sort", merge: "Merge Sort", heap: "Heap Sort" };
 
   const getDelay = () => Math.max(1, 101 - speed);
 
@@ -375,6 +593,7 @@ function SortingVisualizer({ onBack }) {
         { color: COLORS.pivot,     label: "Pivot"      },
         { color: COLORS.sorted,    label: "Sorted"     },
       ]}
+      aiPanel={<AIExplainerPanel algoName={ALGO_LABELS[algo]} algoContext={`Sorting ${size} elements using ${ALGO_LABELS[algo]}. Comparisons so far: ${stats.comparisons}, Swaps: ${stats.swaps}.`} />}
     >
       <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block" }} />
     </VisualizerLayout>
@@ -403,6 +622,8 @@ function PathfindingVisualizer({ onBack }) {
   const mouseDown = useRef(false);
   const startCell = useRef({ r: 10, c: 5 });
   const endCell = useRef({ r: 10, c: 39 });
+
+  const ALGO_LABELS = { bfs: "Breadth-First Search", dfs: "Depth-First Search", dijkstra: "Dijkstra's Algorithm", astar: "A* Search" };
 
   useEffect(() => {
     gridRef.current[10][5].type = "start";
@@ -466,7 +687,6 @@ function PathfindingVisualizer({ onBack }) {
 
   const runPathfinding = async () => {
     if (running) return;
-    // clear visited/path
     const g = gridRef.current;
     for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
       const cell = g[r][c];
@@ -558,6 +778,7 @@ function PathfindingVisualizer({ onBack }) {
         {color:"#1e293b",label:"Wall"},{color:"#1e3a8a",label:"Queued"},
         {color:"#312e81",label:"Visited"},{color:COLORS.path,label:"Path"},
       ]}
+      aiPanel={<AIExplainerPanel algoName={ALGO_LABELS[algo]} algoContext={`Running ${ALGO_LABELS[algo]} on a ${ROWS}x${COLS} grid. Steps explored: ${stats.steps}. Path length found: ${stats.pathLen}.`} />}
     >
       <div
         style={{ overflowX: "auto", overflowY: "auto", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#0b1220", userSelect: "none" }}
@@ -668,9 +889,9 @@ function BinarySearchVisualizer({ onBack }) {
         {color:COLORS.pivot,label:"Mid"},{color:COLORS.sorted,label:"Found"},
         {color:"#0f2040",label:"Eliminated"},
       ]}
+      aiPanel={<AIExplainerPanel algoName="Binary Search" algoContext={`Searching for ${target} in a sorted array of ${size} elements. Steps taken: ${steps}. ${foundIdx >= 0 ? `Found at index ${foundIdx}.` : "Still searching."}`} />}
     >
       <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: "20px 20px 10px", background: "#0b1220", overflowX: "auto" }}>
-        {/* Labels */}
         <div style={{ display: "flex", alignItems: "flex-end", gap: 2, marginBottom: 6 }}>
           {arr.map((v, i) => (
             <div key={i} style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -680,13 +901,11 @@ function BinarySearchVisualizer({ onBack }) {
             </div>
           ))}
         </div>
-        {/* Bars */}
         <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: "65%", minHeight: 200 }}>
           {arr.map((v, i) => (
             <div key={i} style={{ flex: "1 1 0", minWidth: 4, height: `${(v / maxVal) * 100}%`, background: getBarColor(i), borderRadius: "2px 2px 0 0", transition: "background 0.15s" }} />
           ))}
         </div>
-        {/* Values */}
         <div style={{ display: "flex", gap: 2, marginTop: 4 }}>
           {arr.map((v, i) => (
             <div key={i} style={{ flex:"1 1 0", minWidth:0, textAlign:"center", fontSize:Math.min(10,Math.floor(800/arr.length)), color: getBarColor(i)===COLORS.sorted?"#10b981":getBarColor(i)==="#0f2040"?"#1e3a5f":"#475569", overflow:"hidden" }}>
@@ -802,6 +1021,7 @@ function NQueensVisualizer({ onBack }) {
         {color:"#10b981",label:"Queen (safe)"},{color:"#ef4444",label:"Conflict/Backtrack"},
         {color:"rgba(245,158,11,0.3)",label:"Trying"},
       ]}
+      aiPanel={<AIExplainerPanel algoName="N-Queens Backtracking" algoContext={`Solving ${n}-Queens problem. Steps taken: ${stats.steps}. Solutions found: ${stats.solutions}. Currently trying to place a queen.`} />}
     >
       <div style={{ height:"100%", display:"flex", alignItems:"center", justifyContent:"center", background:"#0b1220" }}>
         <div style={{ display:"inline-block", border:"2px solid #334155", borderRadius:4 }}>
@@ -843,26 +1063,25 @@ function ConvexHullVisualizer({ onBack }) {
   const [running, setRunning] = useState(false);
   const [stats, setStats] = useState({ points: 0, hull: 0 });
 
+  const ALGO_LABELS = { graham: "Graham Scan", jarvis: "Jarvis March" };
+
   const draw = () => {
     const canvas = canvasRef.current; if (!canvas) return;
     const ctx = canvas.getContext("2d");
     const { pts, hull, stack, current } = stateRef.current;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#0b1220"; ctx.fillRect(0,0,canvas.width,canvas.height);
-    // Draw hull fill
     if (hull.length >= 3) {
       ctx.beginPath(); ctx.moveTo(hull[0].x, hull[0].y);
       hull.forEach(p => ctx.lineTo(p.x, p.y));
       ctx.closePath(); ctx.fillStyle = "rgba(16,185,129,0.07)"; ctx.fill();
       ctx.strokeStyle = "#10b981"; ctx.lineWidth = 2; ctx.stroke();
     }
-    // stack edges
     if (stack.length >= 2) {
       ctx.beginPath(); ctx.moveTo(stack[0].x, stack[0].y);
       stack.forEach(p => ctx.lineTo(p.x, p.y));
       ctx.strokeStyle = "rgba(245,158,11,0.5)"; ctx.lineWidth = 1.5; ctx.stroke();
     }
-    // Points
     pts.forEach(p => {
       const inHull = hull.includes(p);
       const inStack = stack.includes(p);
@@ -929,7 +1148,6 @@ function ConvexHullVisualizer({ onBack }) {
       }
       s.hull=[...stack]; s.stack=[]; s.current=null;
     } else {
-      // Jarvis March
       const pts = s.pts; const n = pts.length;
       const hullPts = [];
       let l = pts.reduce((mi,p,i)=>p.x<pts[mi].x?i:mi, 0);
@@ -973,13 +1191,13 @@ function ConvexHullVisualizer({ onBack }) {
           <Btn label="■ Stop" variant="danger" onClick={()=>{stateRef.current.cancel=true;setRunning(false);}} disabled={!running} />
           <StatBadge label="Points" value={stats.points} />
           <StatBadge label="Hull" value={stats.hull} />
-          <span style={{fontSize:11,color:"#64748b"}}>Click canvas to add points</span>
         </>
       }
       legend={[
         {color:"#475569",label:"Points"},{color:"#f59e0b",label:"Considering"},
         {color:"#10b981",label:"Hull Vertex"},{color:"rgba(16,185,129,0.3)",label:"Hull Area"},
       ]}
+      aiPanel={<AIExplainerPanel algoName={ALGO_LABELS[algo]} algoContext={`Running ${ALGO_LABELS[algo]} on ${stats.points} points. Hull vertices found so far: ${stats.hull}.`} />}
     >
       <canvas ref={canvasRef} onClick={handleCanvasClick} style={{width:"100%",height:"100%",display:"block",cursor:"crosshair"}} />
     </VisualizerLayout>
@@ -998,6 +1216,8 @@ function PrimeSieveVisualizer({ onBack }) {
   const [currentNum, setCurrentNum] = useState(-1);
   const [stats, setStats] = useState({ primes: 0, steps: 0 });
   const runRef = useRef({ cancel: false });
+
+  const ALGO_LABELS = { sieve: "Sieve of Eratosthenes", brute: "Brute Force Prime Search" };
 
   const reset = (l = limit) => {
     runRef.current.cancel = true;
@@ -1069,6 +1289,7 @@ function PrimeSieveVisualizer({ onBack }) {
         {color:"#1e293b",label:"Unknown"},{color:COLORS.current,label:"Current"},
         {color:COLORS.prime,label:"Prime"},{color:"#3b0a0a",label:"Composite"},
       ]}
+      aiPanel={<AIExplainerPanel algoName={ALGO_LABELS[algo]} algoContext={`Running ${ALGO_LABELS[algo]} up to ${limit}. Primes found: ${stats.primes}. Steps taken: ${stats.steps}.`} />}
     >
       <div style={{overflowY:"auto",height:"100%",padding:"12px 16px",background:"#0b1220"}}>
         <div style={{display:"grid",gridTemplateColumns:`repeat(${cols}, ${cellSize}px)`,gap:2}}>
@@ -1095,18 +1316,18 @@ function RecursionTreeVisualizer({ onBack }) {
   const [stats, setStats] = useState({ calls: 0, depth: 0 });
   const runRef = useRef({ cancel: false });
 
+  const FUNC_LABELS = { fibonacci: "Fibonacci Recursion", factorial: "Factorial Recursion", power: "Power Function Recursion" };
+
   const draw = (nodes, edges, active=-1) => {
     const canvas = canvasRef.current; if (!canvas) return;
     const ctx = canvas.getContext("2d");
     const W=canvas.width, H=canvas.height;
     ctx.clearRect(0,0,W,H); ctx.fillStyle="#0b1220"; ctx.fillRect(0,0,W,H);
-    // Edges
     ctx.strokeStyle="#1e3a5f"; ctx.lineWidth=1.5;
     edges.forEach(({from,to})=>{
       const f=nodes[from], t=nodes[to];
       ctx.beginPath(); ctx.moveTo(f.x,f.y); ctx.lineTo(t.x,t.y); ctx.stroke();
     });
-    // Nodes
     nodes.forEach((node,i)=>{
       const isActive = i===active;
       const r=16;
@@ -1123,42 +1344,12 @@ function RecursionTreeVisualizer({ onBack }) {
     if (running) return;
     runRef.current.cancel=false; setRunning(true);
     const canvas=canvasRef.current; if (!canvas) return;
-    const W=canvas.width, H=canvas.height;
+    const W=canvas.width;
     const nodes=[], edges=[];
     let callCount=0, maxDepth=0;
     const delay=()=>sleep(Math.max(10, 201-speed*2));
 
-    // Layout computation: assign x positions
-    const posMap={};
-    let leafIndex=0;
-
-    // first pass: compute positions
-    const computeLayout=(label,depth,parentId=-1)=>{
-      const nodeId=nodes.length;
-      nodes.push({label,x:0,y:depth*60+40,done:false,depth});
-      if (parentId>=0) edges.push({from:parentId,to:nodeId});
-      maxDepth=Math.max(maxDepth,depth);
-
-      if (func==="fibonacci") {
-        const fib_n=parseInt(label.split("(")[1]);
-        if (fib_n<=1) { posMap[nodeId]=leafIndex++; }
-        else {
-          computeLayout(`F(${fib_n-1})`,depth+1,nodeId);
-          computeLayout(`F(${fib_n-2})`,depth+1,nodeId);
-          const kids=nodes.filter((_,i)=>edges.some(e=>e.from===nodeId&&e.to===i));
-          posMap[nodeId]=(posMap[kids[0]?.id||nodeId]+posMap[kids[kids.length-1]?.id||nodeId])/2||leafIndex++;
-        }
-      } else if (func==="factorial") {
-        const f_n=parseInt(label.split("(")[1]);
-        if (f_n<=0) { posMap[nodeId]=leafIndex++; }
-        else { computeLayout(`f(${f_n-1})`,depth+1,nodeId); posMap[nodeId]=posMap[nodeId-1]||leafIndex++; }
-      }
-      return nodeId;
-    };
-
-    // Build tree structure properly
     const buildAndAnimate=async()=>{
-      const visited={};
       const animate=async(label,depth,px,parentId=-1)=>{
         if (runRef.current.cancel) return 0;
         callCount++;
@@ -1166,7 +1357,8 @@ function RecursionTreeVisualizer({ onBack }) {
         const y=depth*70+50;
         nodes.push({label,x:px,y,done:false,depth});
         if (parentId>=0) edges.push({from:parentId,to:nodeId});
-        setStats({calls:callCount,depth:Math.max(maxDepth,depth)});
+        maxDepth=Math.max(maxDepth,depth);
+        setStats({calls:callCount,depth:maxDepth});
         draw(nodes,edges,nodeId);
         await delay();
 
@@ -1187,9 +1379,7 @@ function RecursionTreeVisualizer({ onBack }) {
           const parts=label.replace("pow(","").replace(")","").split(",");
           const [base,exp]=parts.map(Number);
           if (exp===0) result=1;
-          else {
-            result=base*(await animate(`pow(${base},${exp-1})`,depth+1,px,nodeId));
-          }
+          else result=base*(await animate(`pow(${base},${exp-1})`,depth+1,px,nodeId));
         }
 
         nodes[nodeId].done=true;
@@ -1241,6 +1431,7 @@ function RecursionTreeVisualizer({ onBack }) {
         {color:COLORS.default,label:"Pending"},{color:COLORS.comparing,label:"Active"},
         {color:COLORS.sorted,label:"Resolved"},
       ]}
+      aiPanel={<AIExplainerPanel algoName={FUNC_LABELS[func]} algoContext={`Visualizing ${FUNC_LABELS[func]} with n=${n}. Total recursive calls so far: ${stats.calls}. Maximum recursion depth: ${stats.depth}.`} />}
     >
       <canvas ref={canvasRef} style={{width:"100%",height:"100%",display:"block"}} />
     </VisualizerLayout>
@@ -1254,7 +1445,6 @@ export default function App() {
   const [page, setPage] = useState("home");
 
   useEffect(() => {
-    // Load fonts
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=Exo+2:wght@400;700;800&display=swap";
